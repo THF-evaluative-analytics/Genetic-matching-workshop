@@ -1,0 +1,282 @@
+---
+title: "Genetic matching workshop (with answers)"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+##
+
+(0) Load libraries
+
+```{r}
+library(tidyverse)
+library(tableone)
+library(skimr)
+library(broom)
+library(Matching)
+library(rgenoud)
+library(parallel)
+```
+
+
+## Load the data set
+
+(1) Read the data set in R
+
+```{r}
+df <- readRDS("df.rds")
+```
+
+DF is completely fake data set that we have generated for this workshop. It is intended to replicate a patient level data where some patients received an intervention aimed at reducing a negative outcome. It has some comorbidities (`hypertension`, `diabetes`, `dementia` ), an outcome (`outcome`), an intervention flag (`intervention`) and one variable that we would not have been able to observe (`smoking_unobserved`). 
+
+Let's start by looking at the data. 
+
+
+## Exploratory data analysis 
+
+(2) Look at your data using View()
+
+```{r, eval=FALSE}
+View(df)
+df %>% 
+  filter(intervention==1) %>% 
+  View("intervention only")
+
+df %>% 
+  filter(intervention==0) %>% 
+  View("comparison only")
+```
+
+(3) Look at your data using the `skimr` package. The main function is `skim` but you can also combine it with `summary`. 
+
+```{r}
+skim(df)
+skim(df) %>% 
+  summary()
+```
+
+(4) Create a nice table with descriptive statistics using `CreateTableOne` from the `tableone` package. Include `smoking_unobserved`. 
+
+```{r}
+all_vars <- c("male",  "hypertension", "diabetes", "dementia", 'outcome', "smoking_unobserved")
+factor_vars <- c("hypertension", "male", "diabetes", "dementia")
+base_match_var <- c("hypertension", "diabetes", "dementia", "age" , 'male')
+
+table1_bm<- CreateTableOne(data=df, factorVars = factor_vars, vars= all_vars , strata = 'intervention')
+print(table1_bm)
+# only run this if you want to save the table in a .csv file
+print(table1_bm, quote = FALSE, noSpaces = TRUE, printToggle = FALSE) %>% 
+write.csv("table1_bm.csv")
+
+```
+
+(5) Most variables are binary but let's take a closer look at `age`. Plot the age distribution for the intervention and comparison groups separately. 
+
+```{r}
+median_df <- df %>% 
+  group_by(intervention) %>% 
+  summarise(age=median(age))
+
+ggplot(df, aes(x=age, ..density.., fill='pink')) + geom_histogram(binwidth = 1) + geom_vline(data=median_df, aes(xintercept = age),col='purple',size=1) + geom_text(data=median_df, aes(x=age,
+           y=0.1,label=paste0('Median: ',round(age,digits=0))),hjust=-0.5, size=3) + facet_wrap(~intervention) +theme_minimal() + theme(legend.position = "none")
+```
+
+
+# Crude regression before matching 
+
+(6) Let's run a crude regression model
+
+```{r}
+crude_bm <- lm(outcome~ intervention, data=df)
+
+crude_bm_tidy <- broom::tidy(crude_bm, conf.int = TRUE)
+
+print(crude_bm_tidy)
+
+```
+
+# Adjusted regression before matching 
+
+(7) Now let's try an adjusted regression model
+
+Replace XXXXXXXXXXXX by the variables that you want to include in your regression. Remember that you can't use `smoking_unobserved`
+
+```{r}
+adj_bm <- lm(outcome ~ intervention + male + age + hypertension + dementia+ diabetes , data=df)
+
+adj_bm_tidy <- broom::tidy(adj_bm, conf.int = TRUE)
+
+print(adj_bm_tidy)
+
+```
+
+
+## Genetic matching
+
+(8) Let's run a genetic matching
+
+We have wrapped the genetic matching code in a function to avoid clogging up our workspace with matrices that we will only need once. The code is below. Please note that this is a CPU intense process so changing any of the inputs `pop.size` or `wait.generations` could increase the time it takes to run substantially. 
+
+We do not include the outcome in the matching. 
+
+```{r , eval=F}
+
+base_match_var <- c("hypertension", "diabetes", "dementia", "age" , 'male')
+
+gen_match <- function(intervention="intervention", data, matching_vars, balance_vars, exact_vars, name, replace=TRUE,...) {
+  
+  time_start <- Sys.time()
+  data_name <- quote(data)
+  data2 <- eval(data)
+  
+  matching_matrix <- data2 %>%
+    dplyr::select_at(matching_vars) %>% 
+    data.matrix()
+  
+  balance_matrix <- data2 %>%
+    dplyr::select_at(balance_vars) %>% 
+    data.matrix()
+  
+  treatment_status <- data2 %>%
+    dplyr::select_at(intervention) %>% 
+    data.matrix()
+  
+  exact_vars2 <- colnames(matching_matrix) %in% exact_vars  # Compute logical indicators in matching 2d-array for variables exactly matched on
+
+# Carry out genetic matching  
+gen <- GenMatch(Tr=treatment_status, X=matching_matrix, BalanceMatrix=balance_matrix,
+                  exact=exact_vars2, estimand='ATT', M=1, pop.size=250,
+                  wait.generations=30, hard.generation.limit=TRUE, max.generations=100,
+                  replace=replace, ties=FALSE, weight=NULL, print.level=1, balance=TRUE)    
+ # Carry out matching with genetic matching weights  
+  mw <- Match(Tr=treatment_status, X=matching_matrix, exact=exact_vars2, Weight.matrix=as.matrix(gen$Weight.matrix),
+              estimand="ATT", replace=replace, ties=FALSE, M=1)
+  
+  # get matched data
+  treated <- data.frame(index=mw$index.treated, weights=mw$weights)
+  control <- data.frame(index=mw$index.control, weights=mw$weights)
+  
+  bind_treated_control <- rbind(control, treated) %>%
+    as.data.frame() %>%
+    tbl_df()
+  
+  data2 <- data %>% 
+    dplyr:: mutate(index=row_number())
+  
+  match_dat<- inner_join(bind_treated_control,data2, by="index") %>%
+    tbl_df()
+
+  time_end <- Sys.time()- time_start
+  mw[["spec"]] <- list(data_name,matching_vars=matching_vars, balance_vars=balance_vars, exact_vars=exact_vars, time_run=time_end, nobs=dim(data2))
+  mw[["genmatch_weight_matrix"]] <- list(gen$Weight.matrix)
+  mw[['matched_df']] <- match_dat
+  return(mw)
+}
+cluster1 <- makeCluster(4)
+# Run the matching
+dat_match_base_exact_none_replacement <- df %>%
+  gen_match(data=., matching_vars=base_match_var, exact_var=NULL,
+                                              balance_vars=base_match_var, cluster=cluster1,
+                                                   replace=FALSE)
+# Extract the matched data set
+matched_df <- dat_match_base_exact_none_replacement$matched_df
+
+```
+
+(9) Load data sets in case the matching didn't run. 
+
+```{r}
+matched_df <- readRDS("matched_df.rds")
+dat_match_base_exact_none_replacement <- readRDS("dat_match_base_exact_none_replacement.rds")
+```
+
+
+## Assessing the balance
+
+(10) Assess the balance between the intervention and matched comparison groups
+
+We want to know if the intervention and comparison groups are more similar than before the matching. 
+The most common measure is the standardised mean difference. The code below will calculate the SMDs for you. 
+
+```{r}
+formula1 <- as.formula(paste("intervention", paste(c(base_match_var), collapse=" + "), sep=" ~ "))    # Set regression model for matching
+
+# SMD full data set 
+SMD_full_df <-  map(list(df=df, matched_df=matched_df), ~MatchBalance(formula1, data= ., match.out = NULL, nboots=100, print.level = 0)) %>% 
+  map(., "BeforeMatching") %>% # get BeforeMatching item
+  map(~map(., "sdiff")) %>% # get standardised diff
+  map(.,~unlist(.)) %>%  
+  as.data.frame() %>% 
+  data.frame(base_match_var,.)
+
+```
+
+(11) Look at the output from the balance assessment. You can use View()
+
+```{r, eval=FALSE}
+View(SMD_full_df)
+
+```
+
+
+(12) Create a graph showing the SMDs before and after matching
+
+```{r}
+ggplot(SMD_full_df) + 
+         geom_point(aes(y=base_match_var, x=df, col="blue")) +
+         geom_point(aes(y=base_match_var, x=matched_df, col="red")) +   geom_vline(xintercept = 10, color = "black", size = 0.1) +
+         geom_vline(xintercept = -10, color = "black", size = 0.1) + ggtitle("SMD") + xlim(-60,60) + 
+         scale_color_manual(name="",values = c(rgb(221, 000, 049,maxColorValue = 255),rgb(083, 169, 205,maxColorValue = 255)),
+                            labels=c("Before matching", "After matching")) + 
+       theme(text = element_text(size=10),
+             axis.text.x = element_text(size = 10), 
+             axis.text.y = element_text(size = 8))
+```
+
+
+(13) Look at descriptive statistics. You can use the `tableone` package again but remember to change the data set to `matched_df`. 
+
+```{r}
+all_vars <- c("male",  "hypertension", "diabetes", "dementia", 'outcome', "smoking_unobserved")
+factor_vars <- c("hypertension", "male", "diabetes", "dementia")
+
+table2_am<- CreateTableOne(data=matched_df, factorVars = factor_vars, vars= all_vars , strata = 'intervention')
+print(table2_am)
+
+# only run this if you want to save the table in a .csv file
+print(table2_am, quote = FALSE, noSpaces = TRUE, printToggle = FALSE) %>% 
+write.csv("table2_am.csv")
+```
+
+
+## Crude regression after matching
+
+(14) Run the regression with only intervention on the right hand side. Remember to use the `matched_df` data set.
+
+```{r}
+crude_am <- lm(outcome~ intervention, data=matched_df)
+
+crude_am_tidy <- broom::tidy(crude_am, conf.int = TRUE)
+
+print(crude_am_tidy)
+```
+
+
+## Adjusted regression after matching
+
+(15) Run the regression with all the known covariates (including intervention) on the right hand side.
+
+```{r}
+adj_am <- lm(outcome ~ intervention + male + age + hypertension + dementia+ diabetes , data=matched_df)
+
+adj_am_tidy <- broom::tidy(adj_am, conf.int = TRUE)
+
+print(adj_am_tidy)
+```
+
+
+
+
