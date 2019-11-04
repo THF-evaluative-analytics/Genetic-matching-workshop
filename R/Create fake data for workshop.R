@@ -22,7 +22,7 @@ def_lin <- defData(varname = 'hypertension', dist='binary', formula= '0.3 ') %>%
 df <- genData(5000, def_lin)
 
 # Save fake data 
-saveRDS(df, 'df.rds')
+saveRDS(df, here::here('data', 'df.rds'))
 # Check that the fake data looks useful
 crude_lin <- lm(died ~ intervention, data=df)
 adj_lin <- lm(died ~ intervention + hypertension, data=df)
@@ -112,5 +112,5 @@ matched_df <- dat_neighbourhood_match_base_exact_none_replacement$matched_df
 
 # Save matched data
 
-saveRDS(matched_df, 'matched_df.rds')
+saveRDS(matched_df,here::here('data', 'matched_df.rds'))
 

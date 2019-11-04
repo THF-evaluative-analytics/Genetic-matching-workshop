@@ -27,7 +27,7 @@ library(parallel)
 (1) Read the data set in R
 
 ```{r}
-df <- readRDS("df.rds")
+df <- readRDS(here::here('data', "df.rds"))
 ```
 
 DF is completely fake data set that we have generated for this workshop. It is intended to replicate a patient level data where some patients received an intervention aimed at reducing a negative outcome. It has some comorbidities (`hypertension`, `diabetes`, `dementia` ), an outcome (`outcome`), an intervention flag (`intervention`) and one variable that we would not have been able to observe (`smoking_unobserved`). 
@@ -189,8 +189,8 @@ matched_df <- dat_match_base_exact_none_replacement$matched_df
 (9) Load data sets in case the matching didn't run. 
 
 ```{r}
-matched_df <- readRDS("matched_df.rds")
-dat_match_base_exact_none_replacement <- readRDS("dat_match_base_exact_none_replacement.rds")
+matched_df <- readRDS(here::here('data', "matched_df.rds"))
+dat_match_base_exact_none_replacement <- readRDS(here::here('data', "dat_match_base_exact_none_replacement.rds"))
 ```
 
 
