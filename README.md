@@ -40,7 +40,7 @@ This project does not use any real data. We built a small fake dataset intended 
 
 This workshop was created and delivered by 
 
-Emma Vestesson  [Github](www.github.com/emma) / [Twitter](www.twitter.com/gummifot)
-Geraldine Clarke [Twitter](https://twitter.com/GeraldineCTHF)
-Paris Pariza  [GitHub](https://github.com/Ppariz) / [Twitter](https://twitter.com/ParizaParis)
-Richard Brine 
+* Emma Vestesson  [Github](www.github.com/emma) / [Twitter](www.twitter.com/gummifot)
+* Geraldine Clarke [Twitter](https://twitter.com/GeraldineCTHF)
+* Paris Pariza  [GitHub](https://github.com/Ppariz) / [Twitter](https://twitter.com/ParizaParis)
+* Richard Brine 
