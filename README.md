@@ -3,7 +3,7 @@
 **Project Status: Completed**
 
 ## About this project
-Code from workshop delivered in Cardiff and Leeds as part of NHS R community training programme.This workshop aims to teach the basic principles of how to run genetic matching for a retrospective matched comparison (case-control) study, where we would like to examine the change made by an intervention to a healthcare outcome. In this workshop we also run some introductory data checks and produce descriptive statistics to understand the structure of a fake healthcare dataset provided.
+Code from workshop delivered in Cardiff and Leeds as part of NHS R community training programme. This workshop aims to teach the basic principles of how to run genetic matching for a matched cohort study, where we would like to examine the change made by an intervention to a healthcare outcome. In this workshop we also run some introductory data checks and produce descriptive statistics to understand the structure of a fake healthcare dataset provided.
 
 ## How does it work?
 
